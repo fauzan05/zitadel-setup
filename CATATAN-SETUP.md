@@ -15,7 +15,7 @@
 ## Arsitektur Stack
 
 ```
-User → Traefik (reverse proxy, port 8080)
+User → Traefik (reverse proxy, port 8001)
          ├── /                    → zitadel-login (halaman login)
          ├── /ui/v2/login/*       → zitadel-login
          ├── /api/*               → zitadel-api (strip prefix /api)
@@ -41,8 +41,8 @@ User → Traefik (reverse proxy, port 8080)
 
 ```env
 ZITADEL_DOMAIN=localhost          # Domain yang diakses user
-PROXY_HTTP_PUBLISHED_PORT=8080    # Port yang di-expose ke host machine
-ZITADEL_EXTERNALPORT=8080         # Port yang "dilihat" user dari luar
+PROXY_HTTP_PUBLISHED_PORT=8001    # Port yang di-expose ke host machine
+ZITADEL_EXTERNALPORT=8001         # Port yang "dilihat" user dari luar
 ZITADEL_EXTERNALSECURE=false      # false = HTTP, true = HTTPS
 ZITADEL_PUBLIC_SCHEME=http        # http atau https
 ```
@@ -114,19 +114,19 @@ Untuk mengaktifkan, ubah `TYPE=otel` dan jalankan dengan `--profile observabilit
 ### Prasyarat
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) terinstal dan running
-- Port 8080 tidak dipakai aplikasi lain
+- Port 8001 tidak dipakai aplikasi lain
 
 ### Langkah
 
 ```powershell
 # 1. Masuk ke folder project
-cd c:\Users\fauza\Documents\Coding\zitadel
+cd c:\Users\fauza\Documents\Coding\zitadel-setup
 
 # 2. Jalankan semua service
 docker compose up -d --wait
 
 # 3. Buka browser
-#    http://localhost:8080
+#    http://localhost:8001
 ```
 
 `.env` default sudah siap pakai untuk lokal — **tidak perlu diubah apapun**.
@@ -136,10 +136,20 @@ docker compose up -d --wait
 Saat `start-from-init`, Zitadel membuat instance pertama beserta admin user. Cek log untuk melihat credential:
 
 ```powershell
-docker compose logs zitadel-api | Select-String -Pattern "username|password"
+docker compose logs zitadel-api | Select-String -Pattern "username|password|initial|admin"
 ```
 
-Atau cek di admin console: `http://localhost:8080/ui/console`
+URL login/admin yang disarankan:
+
+- URL ringkas admin harian: `http://localhost:8001/admin`
+- URL admin console langsung: `http://localhost:8001/ui/console`
+- URL bootstrap admin (opsional): `http://localhost:8001/admin-bootstrap`
+
+Catatan:
+
+- `login_hint` hanya untuk mempermudah prefill username, bukan mekanisme keamanan.
+- Identitas bootstrap biasanya `zitadel-admin@zitadel.localhost`.
+- Setelah login pertama, buat admin permanen (email corporate) dan aktifkan MFA.
 
 ---
 
@@ -153,8 +163,8 @@ Atau cek di admin console: `http://localhost:8080/ui/console`
 | `ZITADEL_MASTERKEY`          | `Masterkey...`     | String random tepat 32 karakter         |
 | `ZITADEL_EXTERNALSECURE`     | `false`            | `true`                                  |
 | `ZITADEL_PUBLIC_SCHEME`      | `http`             | `https`                                 |
-| `ZITADEL_EXTERNALPORT`       | `8080`             | `443`                                   |
-| `PROXY_HTTP_PUBLISHED_PORT`  | `8080`             | `80` atau `443`                         |
+| `ZITADEL_EXTERNALPORT`       | `8001`             | `443`                                   |
+| `PROXY_HTTP_PUBLISHED_PORT`  | `8001`             | `80` atau `443`                         |
 | `POSTGRES_ADMIN_PASSWORD`    | `postgres`         | Password kuat & unik                    |
 | `POSTGRES_ZITADEL_PASSWORD`  | `zitadel`          | Password kuat & unik                    |
 | `LETSENCRYPT_EMAIL`          | `ops@example.com`  | Email asli kamu                         |
@@ -263,7 +273,7 @@ docker compose logs zitadel-api --tail 50
 Penyebab umum:
 - PostgreSQL belum ready → tunggu atau restart
 - Masterkey berubah setelah data dibuat → kembalikan masterkey lama
-- Port 8080 sudah dipakai → ubah `PROXY_HTTP_PUBLISHED_PORT`
+- Port 8001 sudah dipakai → ubah `PROXY_HTTP_PUBLISHED_PORT`
 
 ### Tidak bisa login
 

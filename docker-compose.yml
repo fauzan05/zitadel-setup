@@ -200,6 +200,43 @@ services:
       - traefik.http.routers.zitadel-login-websecure.service=zitadel-login
       - traefik.http.routers.zitadel-login-websecure.priority=250
 
+      # Admin URL shortcuts.
+      # /admin: recommended day-to-day entrypoint (no prefilled identity).
+      - traefik.http.middlewares.zitadel-admin-redirect.redirectregex.regex=^https?://([^/]+)/admin/?$
+      - traefik.http.middlewares.zitadel-admin-redirect.redirectregex.replacement=${ZITADEL_PUBLIC_SCHEME}://$${1}/ui/console
+      - traefik.http.middlewares.zitadel-admin-redirect.redirectregex.permanent=false
+
+      - traefik.http.routers.zitadel-admin-web.rule=Host(`${ZITADEL_DOMAIN}`) && Path(`/admin`)
+      - traefik.http.routers.zitadel-admin-web.entrypoints=web
+      - traefik.http.routers.zitadel-admin-web.middlewares=zitadel-admin-redirect
+      - traefik.http.routers.zitadel-admin-web.service=zitadel-login
+      - traefik.http.routers.zitadel-admin-web.priority=450
+
+      - traefik.http.routers.zitadel-admin-websecure.rule=Host(`${ZITADEL_DOMAIN}`) && Path(`/admin`)
+      - traefik.http.routers.zitadel-admin-websecure.entrypoints=websecure
+      - traefik.http.routers.zitadel-admin-websecure.tls=true
+      - traefik.http.routers.zitadel-admin-websecure.middlewares=zitadel-admin-redirect
+      - traefik.http.routers.zitadel-admin-websecure.service=zitadel-login
+      - traefik.http.routers.zitadel-admin-websecure.priority=450
+
+      # /admin-bootstrap: optional shortcut for first bootstrap login only.
+      - traefik.http.middlewares.zitadel-admin-bootstrap-redirect.redirectregex.regex=^https?://([^/]+)/admin-bootstrap/?$
+      - traefik.http.middlewares.zitadel-admin-bootstrap-redirect.redirectregex.replacement=${ZITADEL_PUBLIC_SCHEME}://$${1}/ui/console?login_hint=zitadel-admin@zitadel.localhost
+      - traefik.http.middlewares.zitadel-admin-bootstrap-redirect.redirectregex.permanent=false
+
+      - traefik.http.routers.zitadel-admin-bootstrap-web.rule=Host(`${ZITADEL_DOMAIN}`) && Path(`/admin-bootstrap`)
+      - traefik.http.routers.zitadel-admin-bootstrap-web.entrypoints=web
+      - traefik.http.routers.zitadel-admin-bootstrap-web.middlewares=zitadel-admin-bootstrap-redirect
+      - traefik.http.routers.zitadel-admin-bootstrap-web.service=zitadel-login
+      - traefik.http.routers.zitadel-admin-bootstrap-web.priority=451
+
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.rule=Host(`${ZITADEL_DOMAIN}`) && Path(`/admin-bootstrap`)
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.entrypoints=websecure
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.tls=true
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.middlewares=zitadel-admin-bootstrap-redirect
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.service=zitadel-login
+      - traefik.http.routers.zitadel-admin-bootstrap-websecure.priority=451
+
   postgres:
     image: ${POSTGRES_IMAGE}
     restart: unless-stopped
