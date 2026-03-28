@@ -155,6 +155,8 @@ Catatan:
 
 ## Setup untuk SERVER (Production)
 
+Checklist tambahan (VM2 + gateway VM3, firewall, OIDC, `lark-proxy`): lihat [VM-DEPLOY.md](VM-DEPLOY.md).
+
 ### Yang WAJIB Diubah
 
 | Variable                     | Nilai Lokal        | Ubah ke (Production)                    |
@@ -288,7 +290,12 @@ docker compose down -v
 docker compose up -d --wait
 ```
 
-> **Peringatan:** `docker compose down -v` menghapus semua data termasuk database dan bootstrap token!
+> **Peringatan:** `docker compose down -v` menghapus semua data termasuk database dan bootstrap token!, jika ingin aman pakai cara ini :
+# SEBELUM (hanya untuk fresh install):
+command: start-from-init --masterkey "${ZITADEL_MASTERKEY}"
+
+# SESUDAH (aman untuk restart berulang):
+command: start-from-setup --masterkey "${ZITADEL_MASTERKEY}"
 
 ---
 
