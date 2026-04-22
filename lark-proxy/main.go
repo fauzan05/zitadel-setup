@@ -14,15 +14,20 @@ import (
 )
 
 const (
-	defaultPort            = "4000"
-	defaultLarkTokenURL    = "https://open.larksuite.com/open-apis/authen/v2/oauth/token"
-	defaultLarkUserInfoURL = "https://open.larksuite.com/open-apis/authen/v1/user_info"
+	defaultPort             = "4000"
+	defaultLarkAuthorizeURL = "https://accounts.larksuite.com/open-apis/authen/v1/authorize"
+	defaultLarkTokenURL     = "https://open.larksuite.com/open-apis/authen/v2/oauth/token"
+	defaultLarkUserInfoURL  = "https://open.larksuite.com/open-apis/authen/v1/user_info"
 )
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = defaultPort
+	}
+	authorizeURL := os.Getenv("LARK_AUTHORIZE_URL")
+	if authorizeURL == "" {
+		authorizeURL = defaultLarkAuthorizeURL
 	}
 	tokenURL := os.Getenv("LARK_TOKEN_URL")
 	if tokenURL == "" {
@@ -32,16 +37,72 @@ func main() {
 	if userInfoURL == "" {
 		userInfoURL = defaultLarkUserInfoURL
 	}
+	oidcIssuer := strings.TrimSpace(os.Getenv("OIDC_ISSUER"))
+	if oidcIssuer == "" {
+		oidcIssuer = fmt.Sprintf("http://lark-proxy:%s", port)
+	}
+	oidcIssuer = strings.TrimRight(oidcIssuer, "/")
+	authorizeURL = strings.TrimSpace(authorizeURL)
+
+	discovery := oidcDiscoveryDocument{
+		Issuer:                            oidcIssuer,
+		AuthorizationEndpoint:             authorizeURL,
+		TokenEndpoint:                     oidcIssuer + "/token",
+		UserinfoEndpoint:                  oidcIssuer + "/userinfo",
+		JWKSURI:                           oidcIssuer + "/oauth/v2/keys",
+		ResponseTypesSupported:            []string{"code"},
+		SubjectTypesSupported:             []string{"public"},
+		IDTokenSigningAlgValuesSupported:  []string{"RS256"},
+		ScopesSupported:                   []string{"openid", "profile", "email"},
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic", "client_secret_post"},
+		GrantTypesSupported:               []string{"authorization_code", "refresh_token"},
+	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", handleDiscovery(discovery))
+	mux.HandleFunc("/oauth/v2/keys", handleJWKS)
 	mux.HandleFunc("/token", handleToken(tokenURL))
 	mux.HandleFunc("/userinfo", handleUserInfo(userInfoURL))
 
 	addr := ":" + port
-	log.Printf("lark-proxy listening on %s (token=%s userinfo=%s)", addr, tokenURL, userInfoURL)
+	log.Printf("lark-proxy listening on %s (issuer=%s authorize=%s token=%s userinfo=%s)", addr, oidcIssuer, authorizeURL, tokenURL, userInfoURL)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}
+}
+
+type oidcDiscoveryDocument struct {
+	Issuer                            string   `json:"issuer"`
+	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	TokenEndpoint                     string   `json:"token_endpoint"`
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
+	JWKSURI                           string   `json:"jwks_uri"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	GrantTypesSupported               []string `json:"grant_types_supported"`
+}
+
+func handleDiscovery(doc oidcDiscoveryDocument) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(doc)
+	}
+}
+
+func handleJWKS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"keys":[]}`))
 }
 
 // tokenBody holds fields we forward to Lark (JSON body).
@@ -204,6 +265,7 @@ type normalizedUserInfo struct {
 	FamilyName        string  `json:"family_name"`
 	Name              string  `json:"name"`
 	Email             string  `json:"email"`
+	EmailVerified     bool    `json:"email_verified"`
 	Picture           *string `json:"picture,omitempty"`
 }
 
@@ -267,6 +329,17 @@ func handleUserInfo(larkUserInfoURL string) http.HandlerFunc {
 			return
 		}
 
+		d.OpenID = strings.TrimSpace(d.OpenID)
+		d.EnName = strings.TrimSpace(d.EnName)
+		d.Name = strings.TrimSpace(d.Name)
+		d.Email = strings.TrimSpace(strings.ToLower(d.Email))
+		if d.OpenID == "" {
+			// Without a stable subject, ZITADEL cannot link/login users consistently.
+			fmt.Printf("[/userinfo][ERROR] upstream user_info missing open_id\n")
+			http.Error(w, "missing open_id in lark user_info", http.StatusBadGateway)
+			return
+		}
+
 		nameParts := strings.Fields(strings.TrimSpace(firstNonEmpty(d.EnName, d.Name)))
 		firstName := ""
 		lastName := ""
@@ -277,11 +350,9 @@ func handleUserInfo(larkUserInfoURL string) http.HandlerFunc {
 				lastName = firstName
 			}
 		}
-		username := d.OpenID
-		if d.Email != "" {
-			if i := strings.IndexByte(d.Email, '@'); i > 0 {
-				username = d.Email[:i]
-			}
+		username := d.Email
+		if username == "" {
+			username = d.OpenID
 		}
 		if firstName == "" {
 			// Zitadel auto-creation requires GivenName length 1..200.
@@ -304,6 +375,7 @@ func handleUserInfo(larkUserInfoURL string) http.HandlerFunc {
 			FamilyName:        lastName,
 			Name:              displayName,
 			Email:             d.Email,
+			EmailVerified:     d.Email != "",
 			Picture:           d.AvatarURL,
 		}
 		log.Printf("[/userinfo] normalized names preferred_username=%q given_name=%q family_name=%q name=%q", out.PreferredUsername, out.GivenName, out.FamilyName, out.Name)
