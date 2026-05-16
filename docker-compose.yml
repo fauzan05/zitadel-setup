@@ -176,8 +176,9 @@ services:
       - traefik.docker.network=zitadel
       - traefik.http.services.zitadel-login.loadbalancer.server.port=3000
 
-      - traefik.http.middlewares.zitadel-root-rewrite.replacepath.path=/ui/v2/login/
-
+      - traefik.http.middlewares.zitadel-root-rewrite.replacepath.path=/ui/console
+      # Sebelumnya redirect ke /ui/v2/login/
+      # - traefik.http.middlewares.zitadel-root-rewrite.replacepath.path=/ui/v2/login/
       - traefik.http.routers.zitadel-root-web.rule=Host(`${ZITADEL_DOMAIN}`) && Path(`/`)
       - traefik.http.routers.zitadel-root-web.entrypoints=web
       - traefik.http.routers.zitadel-root-web.middlewares=zitadel-root-rewrite
