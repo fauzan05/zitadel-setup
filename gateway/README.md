@@ -8,7 +8,7 @@ Browser membuka WebSocket ke **Nuxt BFF** (bukan langsung ke Go):
 
 `ws(s)://<host>/api/notifications/ws`
 
-Handler ada di Nitro (`cosl-test-lab-consignment`), lalu server mem-proxy ke backend Go. Karena itu **`location` yang mem-proxy `/api/` ke Nuxt** harus mendukung upgrade HTTP.
+Handler ada di Nitro (`cosl-internal-system-web`), lalu server mem-proxy ke backend Go. Karena itu **`location` yang mem-proxy `/api/` ke Nuxt** harus mendukung upgrade HTTP.
 
 ### Yang perlu ada di Nginx
 
